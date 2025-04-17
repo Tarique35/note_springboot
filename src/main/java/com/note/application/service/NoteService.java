@@ -33,6 +33,7 @@ public class NoteService {
 
 	public List<Note> getAllNotesOfUser() {
 		User user = userJpa.findByEmail("tarique@gmail.com");
+		deleteEmptyNotes();
 		return noteJpa.getAllNotesOfUser(user);
 	}
 
@@ -51,5 +52,12 @@ public class NoteService {
 		noteJpa.update(note);
 
 		return null;
+	}
+
+	public void deleteEmptyNotes() {
+		List<Note> noteList = noteJpa.getAllEmptyNotes();
+		for (Note note : noteList) {
+			noteJpa.delete(note);
+		}
 	}
 }

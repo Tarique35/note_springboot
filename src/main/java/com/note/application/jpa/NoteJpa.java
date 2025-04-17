@@ -66,8 +66,18 @@ public class NoteJpa {
 		int noteId = note.getId();
 		String title = jsonObj.getString("title");
 		String content = jsonObj.getString("content");
-		
+
 		return null;
 	}
 
+	public List<Note> getAllEmptyNotes() {
+		User user = userJpa.findByEmail("tarique@gmail.com");
+		List<Note> noteResult = entityManager
+				.createQuery(
+						"Select n from Note n Where n.userId =: user_id And n.title=: title And n.content=: content ",
+						Note.class)
+				.setParameter("user_id", user).setParameter("title", "").setParameter("content", "").getResultList();
+
+		return noteResult;
+	}
 }
