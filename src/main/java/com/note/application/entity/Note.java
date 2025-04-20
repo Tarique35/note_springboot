@@ -1,5 +1,10 @@
 package com.note.application.entity;
 
+import java.time.LocalDateTime;
+
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -21,6 +26,12 @@ public class Note {
 	@ManyToOne
 	@JoinColumn(name = "user_id")
 	private User userId;
+
+	@CreationTimestamp
+	private LocalDateTime createdAt;
+
+	@UpdateTimestamp
+	private LocalDateTime updatedAt;
 
 	public Note() {
 		super();
@@ -76,10 +87,18 @@ public class Note {
 		this.bookmarked = bookmarked;
 	}
 
+	public LocalDateTime getCreatedAt() {
+		return createdAt;
+	}
+
+	public LocalDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
 	@Override
 	public String toString() {
 		return "Note [id=" + id + ", title=" + title + ", content=" + content + ", bookmarked=" + bookmarked
-				+ ", userId=" + userId + "]";
+				+ ", userId=" + userId + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt + "]";
 	}
 
 }
