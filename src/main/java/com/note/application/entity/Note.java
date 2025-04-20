@@ -16,6 +16,7 @@ public class Note {
 
 	private String title;
 	private String content;
+	private Boolean bookmarked;
 
 	@ManyToOne
 	@JoinColumn(name = "user_id")
@@ -26,12 +27,13 @@ public class Note {
 		// TODO Auto-generated constructor stub
 	}
 
-	public Note(int id, String title, String content, User userId) {
+	public Note(int id, String title, String content, User userId, Boolean bookmarked) {
 		super();
 		this.id = id;
 		this.title = title;
 		this.content = content;
 		this.userId = userId;
+		this.bookmarked = bookmarked;
 	}
 
 	public int getId() {
@@ -66,9 +68,18 @@ public class Note {
 		this.userId = userId;
 	}
 
+	public Boolean getBookmarked() {
+		return bookmarked;
+	}
+
+	public void setBookmarked(Boolean bookmarked) {
+		this.bookmarked = bookmarked;
+	}
+
 	@Override
 	public String toString() {
-		return "Note [id=" + id + ", title=" + title + ", content=" + content + ", userId=" + userId + "]";
+		return "Note [id=" + id + ", title=" + title + ", content=" + content + ", bookmarked=" + bookmarked
+				+ ", userId=" + userId + "]";
 	}
 
 }

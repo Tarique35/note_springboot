@@ -43,4 +43,10 @@ public class NotesController {
 	public Note updateExistingNote(@RequestBody String json) {
 		return noteService.updateExistingNote(json);
 	}
+	
+	@PostMapping("/bookmark")
+	public Note bookmark(@RequestBody String json)
+	{
+		return noteService.bookmark(json);
+	}
 }

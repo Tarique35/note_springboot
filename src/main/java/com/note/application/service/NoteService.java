@@ -60,4 +60,16 @@ public class NoteService {
 			noteJpa.delete(note);
 		}
 	}
+
+	public Note bookmark(String json) {
+		Note note = noteJpa.getSelectedNote(json);
+		Boolean isBookmarked = note.getBookmarked();
+		if (isBookmarked == null) {
+			note.setBookmarked(true);
+		} else {
+			note.setBookmarked(!isBookmarked);
+		}
+		noteJpa.update(note);
+		return note;
+	}
 }
