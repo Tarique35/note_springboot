@@ -49,4 +49,10 @@ public class NotesController {
 	{
 		return noteService.bookmark(json);
 	}
+	
+	@PostMapping("/get/bookmarks")
+	public List<Note> getUserBookmarks(@RequestBody String json)
+	{
+		return noteService.getUserBookmarks(json);
+	}
 }

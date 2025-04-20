@@ -72,4 +72,8 @@ public class NoteService {
 		noteJpa.update(note);
 		return note;
 	}
+
+	public List<Note> getUserBookmarks(String json) {
+		return noteJpa.getUserBookmarks(json);
+	}
 }

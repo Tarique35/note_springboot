@@ -73,11 +73,18 @@ public class NoteJpa {
 	public List<Note> getAllEmptyNotes() {
 		User user = userJpa.findByEmail("tarique@gmail.com");
 		List<Note> noteResult = entityManager
-				.createQuery(
-						"Select n from Note n Where n.userId =:user_id And n.title=:title And n.content=:content ",
+				.createQuery("Select n from Note n Where n.userId =:user_id And n.title=:title And n.content=:content ",
 						Note.class)
 				.setParameter("user_id", user).setParameter("title", "").setParameter("content", "").getResultList();
 
 		return noteResult;
+	}
+
+	public List<Note> getUserBookmarks(String json) {
+		User user = userJpa.findByEmail("tarique@gmail.com");
+		List<Note> bookNotes = entityManager
+				.createQuery("Select n from Note n Where n.userId =:user_id And n.bookmarked =true", Note.class)
+				.setParameter("user_id", user).getResultList();
+		return bookNotes;
 	}
 }
