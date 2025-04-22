@@ -3,6 +3,7 @@ package com.note.application.controller;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,7 +24,7 @@ public class NotesController {
 //	{
 //		return noteService.createNewNote(Json);
 //	}
-	
+
 	@PostMapping("/save/note")
 	public Note addNote(@RequestBody Note json) {
 		return noteService.addNote(json);
@@ -43,16 +44,19 @@ public class NotesController {
 	public Note updateExistingNote(@RequestBody String json) {
 		return noteService.updateExistingNote(json);
 	}
-	
+
 	@PostMapping("/bookmark")
-	public Note bookmark(@RequestBody String json)
-	{
+	public Note bookmark(@RequestBody String json) {
 		return noteService.bookmark(json);
 	}
-	
+
 	@PostMapping("/get/bookmarks")
-	public List<Note> getUserBookmarks(@RequestBody String json)
-	{
+	public List<Note> getUserBookmarks(@RequestBody String json) {
 		return noteService.getUserBookmarks(json);
+	}
+
+	@PostMapping("/deletenote")
+	public ResponseEntity<String> deleteNote(@RequestBody String json) {
+		return noteService.deleteNote(json);
 	}
 }
