@@ -1,183 +1,113 @@
 package com.note.application.security;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
-import jakarta.servlet.Filter;
+import com.note.application.dto.UserInfo;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 @Component
-public class JwtVerificationFilter implements Filter {
+public class JwtVerificationFilter extends OncePerRequestFilter {
+
+	private final Logger logger = LoggerFactory.getLogger(JwtVerificationFilter.class);
+
+	@Autowired
+	private RestTemplate restTemplate;
 
 	@Value("${jwt.url}")
 	private String jwtUrl;
 
-	private final RestTemplate rest;
-	private final Logger logger = LoggerFactory.getLogger(JwtVerificationFilter.class);
-
-	public JwtVerificationFilter(RestTemplate rest) {
-		this.rest = rest;
-	}
+	@Value("${jwt.userinfo-path:/home/me}")
+	private String userinfoPath;
 
 	@Override
-	public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
-			throws IOException, ServletException {
+	protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+			throws ServletException, IOException {
 
-		HttpServletRequest request = (HttpServletRequest) req;
-		HttpServletResponse response = (HttpServletResponse) res;
-
-		String path = request.getRequestURI();
-
-		// Skip token verification for public paths
-		if (path.startsWith("/auth") || path.startsWith("/public") || path.startsWith("/images")) {
-			chain.doFilter(req, res);
+		if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+			filterChain.doFilter(request, response);
 			return;
 		}
 
 		String authHeader = request.getHeader("Authorization");
+		logger.debug("JwtVerificationFilter: path={} method={} Authorization-present={}", request.getRequestURI(),
+				request.getMethod(), authHeader != null);
+
 		if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-			response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Missing or invalid Authorization header");
+			filterChain.doFilter(request, response);
 			return;
 		}
 
 		HttpHeaders headers = new HttpHeaders();
-		headers.set("Authorization", authHeader);
+		headers.set(HttpHeaders.AUTHORIZATION, authHeader);
+		// keep the X-Application-Name if your JWT service expects it
 		headers.set("X-Application-Name", "NoteApplication");
 
 		HttpEntity<Void> entity = new HttpEntity<>(headers);
+		String url = jwtUrl + userinfoPath;
 
 		try {
-			// Call JWT microservice verify endpoint
-			ResponseEntity<Map> resp = rest.postForEntity(jwtUrl + "/auth/verify", entity, Map.class);
+			logger.debug("JwtVerificationFilter: calling auth service {}", url);
+			ResponseEntity<Map> resp = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+			logger.debug("JwtVerificationFilter: auth service status {}", resp.getStatusCode());
 
-			if (resp.getStatusCode() == HttpStatus.OK) {
-				// token is valid according to auth service; now extract username from token
-				// payload
-				String token = authHeader.substring(7);
-				String username = extractUsernameFromJwt(token); // returns null if not found
-				String application = extractApplicationFromJwt(token);
-
-				// Build Authentication and set in SecurityContext
-				// You can adjust authorities/roles if your JWT returns roles later
-//				List<SimpleGrantedAuthority> authorities = Collections
-//						.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
-
-				if (username == null) {
-					// Fallback principal if token doesn't contain sub
-					username = "unknown";
+			if (resp.getStatusCode().is2xxSuccessful() && resp.getBody() != null) {
+				@SuppressWarnings("unchecked")
+				Map<String, Object> body = resp.getBody();
+				UserInfo userInfo = UserInfo.fromMap(body);
+				if (userInfo != null) {
+					UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+							userInfo, null, List.of());
+					SecurityContextHolder.getContext().setAuthentication(authentication);
+					logger.debug("JwtVerificationFilter: authentication set for id={}, email={}", userInfo.getId(),
+							userInfo.getEmail());
+					filterChain.doFilter(request, response);
+					return;
+				} else {
+					logger.warn("JwtVerificationFilter: parsing user info from auth service failed");
+					response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+					response.getWriter().write("Invalid user payload from auth service");
+					return;
 				}
-				if (application == null)
-					application = "NoteApplication";
-
-				// create typed principal
-				AuthenticatedUser principal = new AuthenticatedUser(username, application);
-
-				// grant ROLE_USER by default (you can expand later)
-				List<SimpleGrantedAuthority> authorities = Collections
-						.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
-
-				UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(principal,
-						null, authorities);
-
-				SecurityContextHolder.getContext().setAuthentication(authentication);
-				authentication.setDetails(Map.of("token", token));
-				SecurityContextHolder.getContext().setAuthentication(authentication);
-				chain.doFilter(req, res);
-				return;
 			} else {
-				logger.info("Token verification endpoint returned non-OK: {}", resp.getStatusCode());
-				response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token verification failed");
+				// forward auth service non-2xx directly to client
+				logger.warn("JwtVerificationFilter: auth service returned non-2xx: {}", resp.getStatusCode());
+				response.setStatus(resp.getStatusCodeValue());
+				if (resp.getBody() != null)
+					response.getWriter().write(resp.getBody().toString());
 				return;
 			}
-		} catch (Exception e) {
-			logger.error("Error while verifying token with auth service at " + jwtUrl, e);
-			// Distinguish connection failures
-			if (e instanceof org.springframework.web.client.ResourceAccessException) {
-				response.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE,
-						"Auth service unavailable: " + e.getMessage());
-			} else {
-				response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token verification service error");
-			}
+		} catch (HttpClientErrorException he) {
+			// capture upstream 4xx and log body
+			logger.warn("JwtVerificationFilter: auth service returned error {} : {}", he.getStatusCode(),
+					he.getResponseBodyAsString());
+			response.setStatus(he.getStatusCode().value());
+			String body = he.getResponseBodyAsString();
+			if (body != null && !body.isBlank())
+				response.getWriter().write(body);
+			return;
+		} catch (Exception ex) {
+			logger.error("JwtVerificationFilter: unexpected error calling auth service", ex);
+			response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+			response.getWriter().write("Auth service unreachable: " + ex.getMessage());
 			return;
 		}
 	}
-
-	/**
-	 * Decode the JWT payload (base64url) and extract the "sub" claim (subject /
-	 * username). This does NOT validate signature — we rely on the auth service
-	 * /verify for validation.
-	 */
-	private String extractUsernameFromJwt(String jwt) {
-		try {
-			String[] parts = jwt.split("\\.");
-			if (parts.length < 2)
-				return null;
-
-			String payload = parts[1];
-			// Base64 URL decoder (handles padding automatically in Java 8+)
-			byte[] decodedBytes = Base64.getUrlDecoder().decode(payload);
-			String json = new String(decodedBytes, StandardCharsets.UTF_8);
-
-			JSONObject obj = new JSONObject(json);
-			// standard claim name for username in our tokens is "sub"
-			if (obj.has("sub")) {
-				return obj.getString("sub");
-			}
-			// fallback: maybe "username" or "email"
-			if (obj.has("username")) {
-				return obj.getString("username");
-			}
-			if (obj.has("email")) {
-				System.out.println(obj.getString("email"));
-				return obj.getString("email");
-			}
-			return null;
-		} catch (Exception e) {
-			logger.error("Failed to extract username from JWT payload", e);
-			return null;
-		}
-	}
-
-	private String extractApplicationFromJwt(String jwt) {
-		try {
-			String[] parts = jwt.split("\\.");
-			if (parts.length < 2)
-				return null;
-			byte[] decodedBytes = Base64.getUrlDecoder().decode(parts[1]);
-			String json = new String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8);
-			org.json.JSONObject obj = new org.json.JSONObject(json);
-			if (obj.has("application"))
-				return obj.getString("application");
-			if (obj.has("app"))
-				return obj.getString("app");
-			return null;
-		} catch (Exception e) {
-			logger.error("Failed to extract application from JWT payload", e);
-			return null;
-		}
-	}
-
 }

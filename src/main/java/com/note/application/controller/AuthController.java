@@ -61,7 +61,7 @@ public class AuthController {
 	@PostMapping("/login")
 	public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
 		// forward to JWT service login
-		String url = "http://localhost:8081/auth/login";
+		String url = jwtUrl + "/auth/login";
 		Map<String, Object> requestBody = Map.of("email", body.get("email"), "password", body.get("password"),
 				"applicationName", "NoteApplication");
 

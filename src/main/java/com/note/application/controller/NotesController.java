@@ -10,7 +10,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.note.application.dto.UserInfo;
 import com.note.application.entity.Note;
+import com.note.application.entity.User;
+import com.note.application.service.CurrentUserService;
 import com.note.application.service.NoteService;
 
 @RestController
@@ -20,6 +23,9 @@ public class NotesController {
 	@Autowired
 	NoteService noteService;
 
+	@Autowired
+	CurrentUserService currentUserService;
+	
 //	@PostMapping("/note/createnew")
 //	public Note createNewNote(@RequestBody Note Json)
 //	{
@@ -64,5 +70,13 @@ public class NotesController {
 	@GetMapping("/working")
 	public String working() {
 		return "api is working";
+	}
+
+	@GetMapping("/currentuser")
+	public ResponseEntity<?> currentUser() {
+		UserInfo u = currentUserService.getCurrentUser();
+		if (u == null)
+			return ResponseEntity.status(401).body("Unauthorized");
+		return ResponseEntity.ok(u);
 	}
 }
