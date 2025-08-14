@@ -34,7 +34,9 @@ public class UserJpa {
 	}
 
 	public User findByEmail(String email) {
-		return entityManager.createQuery("Select u from User u where u.email=:email", User.class)
-				.setParameter("email", email).getSingleResult();
+		List<User> list = entityManager.createQuery("SELECT u FROM User u WHERE u.email = :email", User.class)
+				.setParameter("email", email).getResultList();
+
+		return list.isEmpty() ? null : list.get(0);
 	}
 }

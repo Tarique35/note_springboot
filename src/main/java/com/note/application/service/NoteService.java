@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import com.note.application.dto.UserInfo;
 import com.note.application.entity.Note;
 import com.note.application.entity.User;
 import com.note.application.jpa.NoteJpa;
@@ -22,21 +23,27 @@ public class NoteService {
 	@Autowired
 	UserJpa userJpa;
 
+	@Autowired
+	CurrentUserService currentUserService;
+
 //	public Note createNewNote(Note json) {
 //		return addNote(json);
 //	}
 
 	public Note addNote(Note json) {
-		User user = userJpa.findByEmail("tarique@gmail.com");
-		json.setUserId(user);
+		UserInfo userInfo = currentUserService.getCurrentUser();
+		json.setUserId(userInfo.getId());
 		noteJpa.save(json);
 		return json;
 	}
 
 	public List<Note> getAllNotesOfUser() {
-		User user = userJpa.findByEmail("tarique@gmail.com");
-		deleteEmptyNotes();
-		return noteJpa.getAllNotesOfUser(user);
+//		User user = userJpa.findByEmail("tarique@gmail.com");
+//		UserInfo userInfo = currentUserService.getCurrentUser();
+//		System.out.println(userInfo);
+//		deleteEmptyNotes();
+//		return noteJpa.getAllNotesOfUser(userInfo.getId());
+		return null;
 	}
 
 	public Note getSelectedNote(String json) {

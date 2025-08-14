@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -58,5 +59,10 @@ public class NotesController {
 	@PostMapping("/deletenote")
 	public ResponseEntity<String> deleteNote(@RequestBody String json) {
 		return noteService.deleteNote(json);
+	}
+
+	@GetMapping("/working")
+	public String working() {
+		return "api is working";
 	}
 }

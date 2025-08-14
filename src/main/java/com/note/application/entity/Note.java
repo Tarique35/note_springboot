@@ -23,9 +23,11 @@ public class Note {
 	private String content;
 	private Boolean bookmarked;
 
-	@ManyToOne
-	@JoinColumn(name = "user_id")
-	private User userId;
+//	@ManyToOne
+//	@JoinColumn(name = "user_id")
+//	private User userId;
+
+	private int userId;
 
 	@CreationTimestamp
 	private LocalDateTime createdAt;
@@ -38,7 +40,7 @@ public class Note {
 		// TODO Auto-generated constructor stub
 	}
 
-	public Note(int id, String title, String content, User userId, Boolean bookmarked) {
+	public Note(int id, String title, String content, int userId, Boolean bookmarked) {
 		super();
 		this.id = id;
 		this.title = title;
@@ -71,11 +73,11 @@ public class Note {
 		this.content = content;
 	}
 
-	public User getUserId() {
+	public int getUserId() {
 		return userId;
 	}
 
-	public void setUserId(User userId) {
+	public void setUserId(int userId) {
 		this.userId = userId;
 	}
 

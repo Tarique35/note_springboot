@@ -43,10 +43,10 @@ public class NoteJpa {
 		entityManager.remove(note);
 	}
 
-	public List<Note> getAllNotesOfUser(User user) {
+	public List<Note> getAllNotesOfUser(int userid) {
 //		String user_id = user.getId();
 		return entityManager.createQuery("Select n from Note n where userId=:userId", Note.class)
-				.setParameter("userId", user).getResultList();
+				.setParameter("userId", userid).getResultList();
 	}
 
 	public Note getSelectedNote(String json) {
