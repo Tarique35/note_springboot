@@ -14,7 +14,12 @@ import com.note.application.entity.User;
 import com.note.application.jpa.NoteJpa;
 import com.note.application.jpa.UserJpa;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.transaction.Transactional;
+
 @Service
+@Transactional
 public class NoteService {
 
 	@Autowired
@@ -25,6 +30,9 @@ public class NoteService {
 
 	@Autowired
 	CurrentUserService currentUserService;
+
+	@PersistenceContext
+	EntityManager entityManager;
 
 //	public Note createNewNote(Note json) {
 //		return addNote(json);
@@ -39,6 +47,12 @@ public class NoteService {
 	public Note addNote(Note json) {
 		int userId = getCurrentUserId();
 		json.setUserId(userId);
+//		if (json.getTitle() == null || json.getTitle().isBlank()) {
+//			return null; // or throw exception / return ResponseEntity
+//		}
+//		if (json.getContent() == null || json.getContent().isBlank()) {
+//			return null;
+//		}
 		noteJpa.save(json);
 		return json;
 	}
@@ -74,10 +88,12 @@ public class NoteService {
 		return null;
 	}
 
+	@Transactional
 	public void deleteEmptyNotes(int userId) {
 		List<Note> noteList = noteJpa.getAllEmptyNotes(userId);
 		for (Note note : noteList) {
-			noteJpa.delete(note);
+			Note managed = entityManager.contains(note) ? note : entityManager.merge(note);
+			entityManager.remove(managed);
 		}
 	}
 
