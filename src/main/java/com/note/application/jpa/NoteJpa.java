@@ -49,12 +49,10 @@ public class NoteJpa {
 				.setParameter("userId", userid).getResultList();
 	}
 
-	public Note getSelectedNote(String json) {
-		User user = userJpa.findByEmail("tarique@gmail.com"); // Assuming you want to get the user first
-		JSONObject jsonObj = new JSONObject(json);
-		int noteId = jsonObj.getInt("id");
+	public Note getSelectedNote(int noteId, int userId) {
+
 		return entityManager.createQuery("SELECT n FROM Note n WHERE n.userId = :user_id AND n.id = :note", Note.class)
-				.setParameter("user_id", user).setParameter("note", noteId).getSingleResult();
+				.setParameter("user_id", userId).setParameter("note", noteId).getSingleResult();
 	}
 
 //	public Note updateExistingNote(String json) {
@@ -70,21 +68,19 @@ public class NoteJpa {
 //		return null;
 //	}
 
-	public List<Note> getAllEmptyNotes() {
-		User user = userJpa.findByEmail("tarique@gmail.com");
+	public List<Note> getAllEmptyNotes(int userId) {
 		List<Note> noteResult = entityManager
 				.createQuery("Select n from Note n Where n.userId =:user_id And n.title=:title And n.content=:content ",
 						Note.class)
-				.setParameter("user_id", user).setParameter("title", "").setParameter("content", "").getResultList();
+				.setParameter("user_id", userId).setParameter("title", "").setParameter("content", "").getResultList();
 
 		return noteResult;
 	}
 
-	public List<Note> getUserBookmarks(String json) {
-		User user = userJpa.findByEmail("tarique@gmail.com");
+	public List<Note> getUserBookmarks(int userId) {
 		List<Note> bookNotes = entityManager
 				.createQuery("Select n from Note n Where n.userId =:user_id And n.bookmarked =true", Note.class)
-				.setParameter("user_id", user).getResultList();
+				.setParameter("user_id", userId).getResultList();
 		return bookNotes;
 	}
 }

@@ -25,7 +25,7 @@ public class NotesController {
 
 	@Autowired
 	CurrentUserService currentUserService;
-	
+
 //	@PostMapping("/note/createnew")
 //	public Note createNewNote(@RequestBody Note Json)
 //	{
@@ -78,5 +78,10 @@ public class NotesController {
 		if (u == null)
 			return ResponseEntity.status(401).body("Unauthorized");
 		return ResponseEntity.ok(u);
+	}
+
+	@GetMapping("/admin/check")
+	public ResponseEntity<?> adminCheck() {
+		return ResponseEntity.ok("Admin only");
 	}
 }

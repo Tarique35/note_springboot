@@ -3,18 +3,23 @@ package com.note.application.security;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.note.application.dto.UserInfo;
 
@@ -73,8 +78,13 @@ public class JwtVerificationFilter extends OncePerRequestFilter {
 				Map<String, Object> body = resp.getBody();
 				UserInfo userInfo = UserInfo.fromMap(body);
 				if (userInfo != null) {
+
+					List<SimpleGrantedAuthority> authorities = userInfo.getRoles() == null ? List.of()
+							: userInfo.getRoles().stream().map(r -> new SimpleGrantedAuthority("ROLE_" + r))
+									.collect(Collectors.toList());
+
 					UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-							userInfo, null, List.of());
+							userInfo, null, authorities);
 					SecurityContextHolder.getContext().setAuthentication(authentication);
 					logger.debug("JwtVerificationFilter: authentication set for id={}, email={}", userInfo.getId(),
 							userInfo.getEmail());

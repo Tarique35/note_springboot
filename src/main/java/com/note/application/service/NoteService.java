@@ -30,31 +30,42 @@ public class NoteService {
 //		return addNote(json);
 //	}
 
-	public Note addNote(Note json) {
+	public int getCurrentUserId() {
 		UserInfo userInfo = currentUserService.getCurrentUser();
-		json.setUserId(userInfo.getId());
+		int currentUserId = userInfo.getId();
+		return currentUserId;
+	}
+
+	public Note addNote(Note json) {
+		int userId = getCurrentUserId();
+		json.setUserId(userId);
 		noteJpa.save(json);
 		return json;
 	}
 
 	public List<Note> getAllNotesOfUser() {
 //		User user = userJpa.findByEmail("tarique@gmail.com");
-//		UserInfo userInfo = currentUserService.getCurrentUser();
 //		System.out.println(userInfo);
-//		deleteEmptyNotes();
-//		return noteJpa.getAllNotesOfUser(userInfo.getId());
-		return null;
+		int userId = getCurrentUserId();
+		deleteEmptyNotes(userId);
+		return noteJpa.getAllNotesOfUser(userId);
 	}
 
 	public Note getSelectedNote(String json) {
-		return noteJpa.getSelectedNote(json);
+		JSONObject jsonObj = new JSONObject(json);
+		int noteId = jsonObj.getInt("id");
+		int userId = getCurrentUserId();
+		return noteJpa.getSelectedNote(noteId, userId);
 	}
 
 	public Note updateExistingNote(String json) {
-		Note note = noteJpa.getSelectedNote(json);
 		JSONObject jsonObj = new JSONObject(json);
-		String title = jsonObj.getString("title");
-		String content = jsonObj.getString("content");
+		int noteId = jsonObj.getInt("id");
+		int userId = getCurrentUserId();
+		Note note = noteJpa.getSelectedNote(noteId, userId);
+		JSONObject jsonObj2 = new JSONObject(json);
+		String title = jsonObj2.getString("title");
+		String content = jsonObj2.getString("content");
 
 		note.setTitle(title);
 		note.setContent(content);
@@ -63,15 +74,18 @@ public class NoteService {
 		return null;
 	}
 
-	public void deleteEmptyNotes() {
-		List<Note> noteList = noteJpa.getAllEmptyNotes();
+	public void deleteEmptyNotes(int userId) {
+		List<Note> noteList = noteJpa.getAllEmptyNotes(userId);
 		for (Note note : noteList) {
 			noteJpa.delete(note);
 		}
 	}
 
 	public Note bookmark(String json) {
-		Note note = noteJpa.getSelectedNote(json);
+		JSONObject jsonObj = new JSONObject(json);
+		int noteId = jsonObj.getInt("id");
+		int userId = getCurrentUserId();
+		Note note = noteJpa.getSelectedNote(noteId, userId);
 		Boolean isBookmarked = note.getBookmarked();
 		if (isBookmarked == null) {
 			note.setBookmarked(true);
@@ -83,7 +97,8 @@ public class NoteService {
 	}
 
 	public List<Note> getUserBookmarks(String json) {
-		return noteJpa.getUserBookmarks(json);
+		int userId = getCurrentUserId();
+		return noteJpa.getUserBookmarks(userId);
 	}
 
 	public ResponseEntity<String> deleteNote(String json) {

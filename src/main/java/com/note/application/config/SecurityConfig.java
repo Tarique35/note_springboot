@@ -21,12 +21,12 @@ public class SecurityConfig {
 
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtVerificationFilter filter) throws Exception {
-		http.cors(
-				Customizer.withDefaults()).csrf(
-						csrf -> csrf.disable())
+		http.cors(Customizer.withDefaults()).csrf(csrf -> csrf.disable())
 				.addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class)
-				.authorizeHttpRequests(auth -> auth.requestMatchers("/auth/login", "/auth/signup/user",
-						"/auth/public/**", "/public/**", "/images/**").permitAll().anyRequest().authenticated());
+				.authorizeHttpRequests(auth -> auth
+						.requestMatchers("/auth/login", "/auth/signup/user", "/auth/public/**", "/public/**",
+								"/images/**")
+						.permitAll().requestMatchers("/admin/**").hasRole("ADMIN").anyRequest().authenticated());
 
 		return http.build();
 	}
