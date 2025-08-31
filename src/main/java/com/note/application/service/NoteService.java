@@ -1,5 +1,6 @@
 package com.note.application.service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.json.JSONObject;
@@ -10,7 +11,6 @@ import org.springframework.stereotype.Service;
 
 import com.note.application.dto.UserInfo;
 import com.note.application.entity.Note;
-import com.note.application.entity.User;
 import com.note.application.jpa.NoteJpa;
 import com.note.application.jpa.UserJpa;
 
@@ -30,6 +30,9 @@ public class NoteService {
 
 	@Autowired
 	CurrentUserService currentUserService;
+
+	@Autowired
+	AIService aiService;
 
 	@PersistenceContext
 	EntityManager entityManager;
@@ -131,5 +134,62 @@ public class NoteService {
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 					.body("Error deleting note: " + e.getMessage());
 		}
+	}
+
+//	public List<Note> searchNotesWithAI(String query, int userId) {
+//		// Step 1: Ask Ollama (DeepSeek) to extract relevant keyword(s)
+//		String keyword = aiService.extractKeywordFromQuery(query);
+//
+//		// Step 2: Search user’s notes with that keyword
+//		return noteJpa.findRelevantNotes(userId, keyword);
+//	}
+
+	public String askNotes(String query, int userId) {
+		// Step 1: Ask AI for keywords
+		String[] keywords = aiService.extractKeywordsFromQuery(query);
+
+		// Step 2: Search notes for each keyword
+		List<Note> relevantNotes = new ArrayList<>();
+		for (String kw : keywords) {
+			relevantNotes.addAll(noteJpa.findRelevantNotes(userId, kw));
+		}
+
+		// Remove duplicates
+		relevantNotes = relevantNotes.stream().distinct().toList();
+
+		// Step 3: If no notes found
+		if (relevantNotes.isEmpty()) {
+			return "No relevant notes found.";
+		}
+
+		// Step 4: Combine notes into context
+		StringBuilder contextBuilder = new StringBuilder();
+		for (Note n : relevantNotes) {
+			contextBuilder.append("Title: ").append(n.getTitle()).append("\n");
+			contextBuilder.append("Content: ").append(n.getContent()).append("\n\n");
+		}
+
+		// Step 5: Ask AI for natural language answer
+		return aiService.generateAnswer(query, contextBuilder.toString());
+	}
+
+	public List<Note> searchNotesByKeywords(String[] keywords, int userId) {
+		List<Note> result = new ArrayList<>();
+		if (keywords == null || keywords.length == 0) {
+			return result;
+		}
+
+		for (String kw : keywords) {
+			if (kw == null || kw.trim().isEmpty())
+				continue;
+			List<Note> found = noteJpa.findRelevantNotes(userId, kw.trim());
+			for (Note n : found) {
+				boolean exists = result.stream().anyMatch(r -> r.getId() == n.getId());
+				if (!exists)
+					result.add(n);
+			}
+		}
+
+		return result;
 	}
 }

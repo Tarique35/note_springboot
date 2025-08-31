@@ -83,4 +83,14 @@ public class NoteJpa {
 				.setParameter("user_id", userId).getResultList();
 		return bookNotes;
 	}
+
+	public List<Note> findRelevantNotes(int userId, String keyword) {
+		return entityManager
+				.createQuery(
+						"SELECT n FROM Note n WHERE n.userId = :userId "
+								+ "AND (LOWER(n.title) LIKE LOWER(:kw) OR LOWER(n.content) LIKE LOWER(:kw))",
+						Note.class)
+				.setParameter("userId", userId).setParameter("kw", "%" + keyword + "%").getResultList();
+	}
+
 }

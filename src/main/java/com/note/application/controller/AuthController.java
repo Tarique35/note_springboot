@@ -68,4 +68,9 @@ public class AuthController {
 		ResponseEntity<Map> resp = rest.postForEntity(url, requestBody, Map.class);
 		return ResponseEntity.status(resp.getStatusCode()).body(resp.getBody());
 	}
+
+	@PostMapping("/test")
+	public ResponseEntity<?> test(@RequestBody String json) {
+		return ResponseEntity.ok(json);
+	}
 }
