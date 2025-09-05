@@ -14,14 +14,14 @@ import com.note.application.dto.UserInfo;
 import com.note.application.entity.Note;
 import com.note.application.entity.User;
 import com.note.application.service.CurrentUserService;
-import com.note.application.service.NoteService;
+import com.note.application.service.OldNoteService;
 
 @RestController
 @CrossOrigin(origins = "*")
 public class NotesController {
 
 	@Autowired
-	NoteService noteService;
+	OldNoteService noteService;
 
 	@Autowired
 	CurrentUserService currentUserService;

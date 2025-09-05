@@ -21,15 +21,15 @@ import org.springframework.web.bind.annotation.RestController;
 import com.note.application.dto.ChatResult;
 import com.note.application.dto.UserInfo;
 import com.note.application.entity.Note;
-import com.note.application.service.AIService;
+import com.note.application.service.OldAIService;
 import com.note.application.service.CurrentUserService;
-import com.note.application.service.NoteService;
+import com.note.application.service.OldNoteService;
 
 import reactor.core.publisher.Flux;
 
 @RestController
 @RequestMapping("/ai")
-public class ChatController {
+public class OldChatController {
 
 	private final OllamaChatModel chatModel;
 
@@ -37,13 +37,13 @@ public class ChatController {
 	CurrentUserService currentUserService;
 
 	@Autowired
-	private NoteService noteService;
+	private OldNoteService noteService;
 
 	@Autowired
-	private AIService aiService;
+	private OldAIService aiService;
 
 	@Autowired
-	public ChatController(OllamaChatModel chatModel) {
+	public OldChatController(OllamaChatModel chatModel) {
 		this.chatModel = chatModel;
 	}
 

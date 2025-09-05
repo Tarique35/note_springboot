@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,21 +21,21 @@ import com.note.application.dto.ChatResult;
 import com.note.application.entity.Note;
 
 @Service
-public class AIService {
+public class OldAIService {
 
 	@Autowired
 	private OllamaChatModel chatModel;
 
 	@Autowired
 	@Lazy
-	NoteService noteService;
+	OldNoteService noteService;
 
 	@Value("${spring.ai.ollama.base-url}")
 	private String ollamaUrl;
 
 	private final WebClient webClient;
 
-	public AIService() {
+	public OldAIService() {
 		this.webClient = WebClient.builder().baseUrl(ollamaUrl) // Ollama local server
 				.build();
 	}
@@ -114,36 +115,6 @@ public class AIService {
 		s = s.replaceAll("(?i)okay[,]? so .*?\\.", " "); // crude remove of "Okay, so I..."
 		s = s.replaceAll("\\s+", " ").trim();
 		return s;
-	}
-
-	private String extractFinalAnswer(String raw) {
-		if (raw == null || raw.isBlank())
-			return "";
-		// If model accidentally left a thought block, try to get text AFTER the last
-		// closing tag
-		int idx = raw.lastIndexOf("</think>");
-		if (idx != -1 && idx + 8 < raw.length()) {
-			String after = raw.substring(idx + 8).trim();
-			if (!after.isBlank())
-				return after;
-		}
-		// If no tag, remove reasoning and return the remaining first/last meaningful
-		// sentence.
-		String cleaned = stripThoughts(raw);
-		// If cleaned contains multiple paragraphs, prefer the last short paragraph
-		// (often final answer)
-		String[] parts = cleaned.split("\\n\\s*\\n");
-		for (int i = parts.length - 1; i >= 0; i--) {
-			String p = parts[i].trim();
-			if (p.length() > 0 && p.length() < 1000) {
-				// if it still looks like analysis, try to pick the final sentence
-				String[] sents = p.split("(?<=[.!?])\\s+");
-				if (sents.length > 0)
-					return sents[sents.length - 1].trim();
-			}
-		}
-		// fallback to whole cleaned string
-		return cleaned;
 	}
 
 	/* ---------- helpers ---------- */
@@ -254,35 +225,6 @@ public class AIService {
 		return set.toArray(new String[0]);
 	}
 
-	private String escapeJson(String s) {
-		if (s == null)
-			return "";
-		return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", "").replace("\n", "\\n");
-	}
-
-	private String callModel(String fullPrompt) {
-		try {
-			Object raw = chatModel.call(fullPrompt); // may return String or ChatResponse
-			if (raw == null)
-				return "";
-			if (raw instanceof String)
-				return ((String) raw).trim();
-			if (raw instanceof org.springframework.ai.chat.model.ChatResponse) {
-				var cr = (org.springframework.ai.chat.model.ChatResponse) raw;
-				try {
-					if (cr.getResult() != null && cr.getResult().getOutput() != null)
-						return cr.getResult().getOutput().toString().trim();
-				} catch (Throwable ignored) {
-				}
-				return cr.toString().trim();
-			}
-			return raw.toString().trim();
-		} catch (Exception e) {
-			// optional: log error
-			return "";
-		}
-	}
-
 	// ---------------- improved extractKeywordsFromQuery ----------------
 	public String[] extractKeywordsFromQuery(String query) {
 		String system = """
@@ -333,161 +275,188 @@ public class AIService {
 		return relevant;
 	}
 
+	/**
+	 * Build a CSV of allowed titles (quoted) to include in the prompt to prevent
+	 * hallucination
+	 */
+	private String allowedTitlesList(List<Note> notes) {
+		return notes.stream().map(n -> {
+			String t = n.getTitle() == null ? "Untitled" : n.getTitle();
+			// escape quotes inside
+			t = t.replace("\"", "\\\"");
+			return "\"" + t + "\"";
+		}).distinct().collect(Collectors.joining(", "));
+	}
+
 	// ---------------- generateAnswer: strict no-think prompt ----------------
 	/**
 	 * New generateAnswer: forces the model to think internally but ONLY return a
 	 * final answer. Uses few-shot examples to teach the model the desired output
 	 * format (final-answer-only).
 	 */
-//	public String generateAnswer(String query, List<Note> matchedNotes) {
-//		String notesContext = buildNotesContext(matchedNotes);
-//
-//		// Strict system message: no chain-of-thought, output only final answer
-//		String system = """
-//				You are an assistant that MUST answer using ONLY the provided notes.
-//				IMPORTANT RULES (MUST FOLLOW):
-//				1) Do NOT reveal your chain-of-thought or any analysis.
-//				2) Output ONLY the final concise answer (1-3 sentences). No extra commentary.
-//				3) If the notes do not contain the answer, output exactly: I could not find this in your notes.
-//				4) If referencing a note, you may briefly indicate the note title in parentheses, e.g. (Title: XYZ).
-//				""";
-//
-//		// Few-shot example (one example) to teach format
-//		String example = """
-//				Example:
-//				Notes:
-//				Title: Shopping
-//				Content: Buy milk and bread.
-//
-//				Question: "Do I have milk on my shopping list?"
-//				Correct output: Yes — your Shopping note lists milk. (Title: Shopping)
-//
-//				Notes:
-//				Title: Random
-//				Content: asdfg qwerty
-//
-//				Question: "How do I fix the login error?"
-//				Correct output: I could not find this in your notes.
-//				""";
-//
-//		String user = "Notes:\n" + notesContext + "\n\nQuestion: " + query
-//				+ "\n\nProduce ONLY the final answer (1-3 sentences). Follow the examples above exactly.";
-//
-//		String raw = callText(system + "\n\n" + example, user);
-//		String cleaned = stripThoughts(raw);
-//
-//		// If model still returns multi-paragraph, prefer the last concise
-//		// paragraph/sentence
-//		if (cleaned.contains("\n\n")) {
-//			String[] parts = cleaned.split("\\n\\s*\\n");
-//			// pick the shortest non-empty chunk from end
-//			for (int i = parts.length - 1; i >= 0; i--) {
-//				String p = parts[i].trim();
-//				if (!p.isEmpty() && p.length() < 1000) {
-//					cleaned = p;
-//					break;
-//				}
-//			}
-//		}
-//
-//		// Final filter: remove phrases that indicate internal reasoning leaked
-//		String low = cleaned.toLowerCase();
-//		if (low.contains("i think") || low.contains("let me") || low.contains("analysis") || low.contains("first")) {
-//			// as a last-resort safe output, prefer the strict fallback
-//			return "I could not find this in your notes.";
-//		}
-//		if (cleaned.isBlank())
-//			return "I could not find this in your notes.";
-//		return cleaned;
-//	}
 
 	public String generateAnswer(String query, List<Note> matchedNotes) {
 		if (matchedNotes == null || matchedNotes.isEmpty()) {
 			return "I could not find this in your notes.";
 		}
 
-		// Build JSON-like array so model sees each note as one unit
-		StringBuilder json = new StringBuilder();
-		json.append("[");
-		for (int i = 0; i < matchedNotes.size(); i++) {
-			Note n = matchedNotes.get(i);
+		// Build notes block (title+content grouped per note). Keep truncation as you
+		// had.
+		StringBuilder notesBlock = new StringBuilder();
+		for (Note n : matchedNotes) {
 			String title = n.getTitle() == null ? "Untitled" : n.getTitle();
 			String content = n.getContent() == null ? "" : n.getContent();
-			// escape quotes/newlines simply for prompt readability
-			title = title.replace("\"", "\\\"");
-			content = content.replace("\"", "\\\"").replace("\r", "").replace("\n", "\\n");
-			json.append("{\"title\":\"").append(title).append("\",\"content\":\"").append(content).append("\"}");
-			if (i < matchedNotes.size() - 1)
-				json.append(",");
+			if (content.length() > 1500)
+				content = content.substring(0, 1500) + "...";
+			content = content.replace("\"", "\\\"").replace("\r", "").replace("\n", " ");
+			notesBlock.append("Note:\nTitle: ").append(title).append("\nContent: ").append(content).append("\n\n");
 		}
-		json.append("]");
 
+		String allowed = allowedTitlesList(matchedNotes); // you already have this helper
+
+		// STRONG single-pass natural-language prompt (no examples -> fewer patterns for
+		// hallucination)
 		String system = """
-				You are a concise assistant that MUST answer using ONLY the provided notes.
-				RULES (MUST FOLLOW):
-				1) Do NOT output any chain-of-thought or internal reasoning.
-				2) Treat each JSON object as one note (title + content). Do NOT invent or assume other notes.
-				3) For each matched note, produce a one-line human-friendly summary (1-2 short sentences) that
-				   either (a) summarizes the content, or (b) if the content appears to be non-meaningful random characters,
-				   say: "Content appears non-meaningful; excerpt: \"<first 40 chars>\"".
-				4) After listing summaries for matched notes, output a single final sentence answering the user question directly
-				   (e.g. "Yes — you have a note titled Testing that seems related to 'test'.").
-				5) If none of the notes answer the question, output exactly: I could not find this in your notes.
-				6) Output MUST be compact: the summaries followed by one final answer sentence. No extra text.
+				You are a concise assistant. Use ONLY the provided notes below. Do NOT invent or assume any other notes.
+				OUTPUT REQUIREMENTS (must follow exactly):
+				1) For EACH note produce a short 1-2 sentence human explanation that mentions the note title and summarizes or quotes the content.
+				2) After the per-note explanations, produce ONE final concise sentence that answers the user's question (e.g., "Yes — you have notes X and Y that relate to 'test'.").
+				3) Do NOT output chain-of-thought, step-by-step reasoning, or internal thoughts.
+				4) If a note's content looks non-meaningful (random characters), say: 'Content appears non-meaningful; excerpt: \"<first 40 chars>\"'.
+				5) Never mention any title not in the Allowed titles list below.
 				""";
 
-		String examples = """
-				Example 1:
-				Notes JSON: [{"title":"Shopping","content":"Buy milk and bread."}]
-				Question: "Do I have milk on my shopping list?"
-				Correct output:
-				Shopping: Your Shopping note lists milk and bread. (Content: "Buy milk and bread.")
-				Final: Yes — your Shopping note lists milk. (Title: Shopping)
+		String user = "Allowed titles: " + allowed + "\n\nNotes:\n" + notesBlock.toString() + "\nUser question: "
+				+ query + "\n\nProduce: per-note 1-2 sentence explanations, then one final sentence. No extra text.";
 
-				Example 2:
-				Notes JSON: [{"title":"Random","content":"asdjf98 234!#$"}]
-				Question: "How to fix login error?"
-				Correct output:
-				Random: Content appears non-meaningful; excerpt: "asdjf98 234!#".
-				Final: I could not find this in your notes.
-				""";
+		Prompt prompt = new Prompt(new org.springframework.ai.chat.messages.SystemMessage(system),
+				new org.springframework.ai.chat.messages.UserMessage(user));
 
-		String user = "NOTES_JSON: " + json.toString() + "\n\nQuestion: " + query
-				+ "\n\nProduce ONLY: (a) one-line summary for each note, then (b) one final answer sentence. Follow the rules above.";
+		// CALL LLM
+		String raw = callText(prompt); // your robust extractor
+		// *** LOG raw result during dev to see exactly what model returned ***
+		System.out.println("[LLM RAW] " + (raw == null ? "<null>" : raw.replaceAll("\\n", "\\\\n")));
 
-		String raw = callText(system + "\n\n" + examples, user);
-		String cleaned = stripThoughts(raw);
+		// STRIP only obvious thinking wrappers and object-toString noise, but don't be
+		// over-eager
+		String cleaned = stripThoughts(raw).trim();
 
-		// If model output contains multiple blank-separated blocks, prefer taking them
-		// all but ensure final sentence present.
-		// Defensive: if model still outputs reasoning, fallback to safe phrasing
-		// referencing titles
-		String low = cleaned.toLowerCase();
-		if (cleaned.isBlank() || low.contains("i think") || low.contains("let me") || low.contains("analysis")
-				|| low.contains("step")) {
-			// fallback: politely state found titles and let user open them
-			String titles = matchedNotes.stream().map(n -> n.getTitle() == null ? "Untitled" : n.getTitle()).distinct()
-					.collect(Collectors.joining(", "));
-			return "Yes — you have note(s): " + titles + ". Would you like to open them?";
+		// If cleaned is empty -> fallback "not found"
+		if (cleaned.isBlank()) {
+			return "I could not find this in your notes.";
 		}
 
-		// final cleanup: ensure we end with a final answer sentence; if not, append one
-		// referencing titles
-		// detect if cleaned already contains a "Final:" line from examples pattern
-		if (cleaned.contains("Final:")) {
-			// remove "Final:" tokens and return neatly
-			String out = Arrays.stream(cleaned.split("\\R")).map(String::trim).filter(s -> !s.isEmpty())
-					.collect(Collectors.joining("\n"));
-			out = out.replaceAll("(?m)^Final:\\s*", "");
-			return out.trim();
+		// If cleaned still clearly contains the object dump tokens (rare), try to
+		// extract the free-text part:
+		String lower = cleaned.toLowerCase();
+		if (lower.contains("assistantmessage") || lower.contains("textcontent")) {
+			// attempt simple extraction: textContent= ... ,metadata=
+			Pattern p = Pattern.compile("textContent\\s*=\\s*(.*?)(,\\s*metadata=|\\}\\s*$)",
+					Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+			Matcher m = p.matcher(cleaned);
+			if (m.find()) {
+				String extracted = m.group(1).trim();
+				extracted = stripThoughts(extracted);
+				if (!extracted.isBlank())
+					return extracted;
+			}
+			// otherwise fall back to whole cleaned text (still better than manual)
 		}
 
-		// If user wants a direct single paragraph: ensure last sentence is final
-		// answer.
-		// We'll return the whole cleaned output (summaries + final answer) as the AI's
-		// response.
-		return cleaned.trim();
+		// ONE IMPORTANT CHANGE: do NOT treat any mildly long output as "bad" and do NOT
+		// apply a manual canned fallback.
+		// Accept the AI's natural-language output as the final answer (trust the
+		// model), unless empty.
+		return cleaned;
 	}
+
+//	public String generateAnswer(String query, List<Note> matchedNotes) {
+//		if (matchedNotes == null || matchedNotes.isEmpty()) {
+//			return "I could not find this in your notes.";
+//		}
+//
+//		// Build JSON-like array so model sees each note as one unit
+//		StringBuilder json = new StringBuilder();
+//		json.append("[");
+//		for (int i = 0; i < matchedNotes.size(); i++) {
+//			Note n = matchedNotes.get(i);
+//			String title = n.getTitle() == null ? "Untitled" : n.getTitle();
+//			String content = n.getContent() == null ? "" : n.getContent();
+//			// escape quotes/newlines simply for prompt readability
+//			title = title.replace("\"", "\\\"");
+//			content = content.replace("\"", "\\\"").replace("\r", "").replace("\n", "\\n");
+//			json.append("{\"title\":\"").append(title).append("\",\"content\":\"").append(content).append("\"}");
+//			if (i < matchedNotes.size() - 1)
+//				json.append(",");
+//		}
+//		json.append("]");
+//
+//		String system = """
+//				You are a concise assistant that MUST answer using ONLY the provided notes.
+//				RULES (MUST FOLLOW):
+//				1) Do NOT output any chain-of-thought or internal reasoning.
+//				2) Treat each JSON object as one note (title + content). Do NOT invent or assume other notes.
+//				3) For each matched note, produce a one-line human-friendly summary (1-2 short sentences) that
+//				   either (a) summarizes the content, or (b) if the content appears to be non-meaningful random characters,
+//				   say: "Content appears non-meaningful; excerpt: \"<first 40 chars>\"".
+//				4) After listing summaries for matched notes, output a single final sentence answering the user question directly
+//				   (e.g. "Yes — you have a note titled Testing that seems related to 'test'.").
+//				5) If none of the notes answer the question, output exactly: I could not find this in your notes.
+//				6) Output MUST be compact: the summaries followed by one final answer sentence. No extra text.
+//				""";
+//
+//		String examples = """
+//				Example 1:
+//				Notes JSON: [{"title":"Shopping","content":"Buy milk and bread."}]
+//				Question: "Do I have milk on my shopping list?"
+//				Correct output:
+//				Shopping: Your Shopping note lists milk and bread. (Content: "Buy milk and bread.")
+//				Final: Yes — your Shopping note lists milk. (Title: Shopping)
+//
+//				Example 2:
+//				Notes JSON: [{"title":"Random","content":"asdjf98 234!#$"}]
+//				Question: "How to fix login error?"
+//				Correct output:
+//				Random: Content appears non-meaningful; excerpt: "asdjf98 234!#".
+//				Final: I could not find this in your notes.
+//				""";
+//
+//		String user = "NOTES_JSON: " + json.toString() + "\n\nQuestion: " + query
+//				+ "\n\nProduce ONLY: (a) one-line summary for each note, then (b) one final answer sentence. Follow the rules above.";
+//
+//		String raw = callText(system + "\n\n" + examples, user);
+//		String cleaned = stripThoughts(raw);
+//
+//		// If model output contains multiple blank-separated blocks, prefer taking them
+//		// all but ensure final sentence present.
+//		// Defensive: if model still outputs reasoning, fallback to safe phrasing
+//		// referencing titles
+//		String low = cleaned.toLowerCase();
+//		if (cleaned.isBlank() || low.contains("i think") || low.contains("let me") || low.contains("analysis")
+//				|| low.contains("step")) {
+//			// fallback: politely state found titles and let user open them
+//			String titles = matchedNotes.stream().map(n -> n.getTitle() == null ? "Untitled" : n.getTitle()).distinct()
+//					.collect(Collectors.joining(", "));
+//			return "Yes — you have note(s): " + titles + ". Would you like to open them?";
+//		}
+//
+//		// final cleanup: ensure we end with a final answer sentence; if not, append one
+//		// referencing titles
+//		// detect if cleaned already contains a "Final:" line from examples pattern
+//		if (cleaned.contains("Final:")) {
+//			// remove "Final:" tokens and return neatly
+//			String out = Arrays.stream(cleaned.split("\\R")).map(String::trim).filter(s -> !s.isEmpty())
+//					.collect(Collectors.joining("\n"));
+//			out = out.replaceAll("(?m)^Final:\\s*", "");
+//			return out.trim();
+//		}
+//
+//		// If user wants a direct single paragraph: ensure last sentence is final
+//		// answer.
+//		// We'll return the whole cleaned output (summaries + final answer) as the AI's
+//		// response.
+//		return cleaned.trim();
+//	}
 
 	// --- Intent classification ---
 	public String classifyIntent(String query) {
@@ -570,54 +539,4 @@ public class AIService {
 		return sb.toString().trim();
 	}
 
-	private String allowedTitlesCsv(List<Note> notes) {
-		if (notes == null || notes.isEmpty())
-			return "";
-		return notes.stream().map(n -> n.getTitle() == null ? "Untitled" : n.getTitle()).distinct()
-				.map(s -> "\"" + s.replace("\"", "\\\"") + "\"").collect(Collectors.joining(", "));
-	}
-
-	private boolean isAcceptableAnswer(String ans, List<Note> matchedNotes) {
-		if (ans == null)
-			return false;
-		String a = ans.trim();
-		if (a.isEmpty())
-			return false;
-
-		String low = a.toLowerCase();
-		// avoid chain-of-thought phrases
-		if (low.contains("i think") || low.contains("let me") || low.contains("first") || low.contains("analysis")
-				|| low.contains("step by step") || low.contains("okay")) {
-			return false;
-		}
-		// length guard
-		if (a.length() > 1000)
-			return false;
-
-		// Titles check: if ans mentions any title not in matchedNotes -> reject
-		List<String> allowed = matchedNotes.stream().map(n -> n.getTitle() == null ? "" : n.getTitle().toLowerCase())
-				.distinct().collect(Collectors.toList());
-
-		// find any quoted or parenthesized Title: patterns
-		Pattern p = Pattern.compile("\\(Title:\\s*([^\\)]+)\\)", Pattern.CASE_INSENSITIVE);
-		Matcher m = p.matcher(a);
-		while (m.find()) {
-			String mentioned = m.group(1).trim().toLowerCase();
-			if (!allowed.contains(mentioned))
-				return false;
-		}
-
-		// Also check for "titled X" or "title X" occurrences — simple substring check
-		// for safety:
-		for (String token : allowed) {
-			// remove token occurrences from answer so leftover words won't fool us
-			a = a.replaceAll("(?i)\\b" + Pattern.quote(token) + "\\b", "");
-		}
-		// if answer still contains the word "title" or "titled" followed by something,
-		// we conservatively reject
-		if (a.matches("(?i).*\\b(title|titled)\\b.*"))
-			return false;
-
-		return true;
-	}
 }

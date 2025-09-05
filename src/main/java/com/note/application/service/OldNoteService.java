@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 import com.note.application.dto.UserInfo;
 import com.note.application.entity.Note;
-import com.note.application.jpa.NoteJpa;
+import com.note.application.jpa.OldNoteJpa;
 import com.note.application.jpa.UserJpa;
 
 import jakarta.persistence.EntityManager;
@@ -20,10 +20,10 @@ import jakarta.transaction.Transactional;
 
 @Service
 @Transactional
-public class NoteService {
+public class OldNoteService {
 
 	@Autowired
-	NoteJpa noteJpa;
+	OldNoteJpa noteJpa;
 
 	@Autowired
 	UserJpa userJpa;
@@ -32,7 +32,7 @@ public class NoteService {
 	CurrentUserService currentUserService;
 
 	@Autowired
-	AIService aiService;
+	OldAIService aiService;
 
 	@PersistenceContext
 	EntityManager entityManager;
@@ -144,34 +144,34 @@ public class NoteService {
 //		return noteJpa.findRelevantNotes(userId, keyword);
 //	}
 
-	public String askNotes(String query, int userId) {
-		// Step 1: Ask AI for keywords
-		String[] keywords = aiService.extractKeywordsFromQuery(query);
-
-		// Step 2: Search notes for each keyword
-		List<Note> relevantNotes = new ArrayList<>();
-		for (String kw : keywords) {
-			relevantNotes.addAll(noteJpa.findRelevantNotes(userId, kw));
-		}
-
-		// Remove duplicates
-		relevantNotes = relevantNotes.stream().distinct().toList();
-
-		// Step 3: If no notes found
-		if (relevantNotes.isEmpty()) {
-			return "No relevant notes found.";
-		}
-
-		// Step 4: Combine notes into context
-		StringBuilder contextBuilder = new StringBuilder();
-		for (Note n : relevantNotes) {
-			contextBuilder.append("Title: ").append(n.getTitle()).append("\n");
-			contextBuilder.append("Content: ").append(n.getContent()).append("\n\n");
-		}
-
-		// Step 5: Ask AI for natural language answer
-		return aiService.generateAnswer(query, contextBuilder.toString());
-	}
+//	public String askNotes(String query, int userId) {
+//		// Step 1: Ask AI for keywords
+//		String[] keywords = aiService.extractKeywordsFromQuery(query);
+//
+//		// Step 2: Search notes for each keyword
+//		List<Note> relevantNotes = new ArrayList<>();
+//		for (String kw : keywords) {
+//			relevantNotes.addAll(noteJpa.findRelevantNotes(userId, kw));
+//		}
+//
+//		// Remove duplicates
+//		relevantNotes = relevantNotes.stream().distinct().toList();
+//
+//		// Step 3: If no notes found
+//		if (relevantNotes.isEmpty()) {
+//			return "No relevant notes found.";
+//		}
+//
+//		// Step 4: Combine notes into context
+//		StringBuilder contextBuilder = new StringBuilder();
+//		for (Note n : relevantNotes) {
+//			contextBuilder.append("Title: ").append(n.getTitle()).append("\n");
+//			contextBuilder.append("Content: ").append(n.getContent()).append("\n\n");
+//		}
+//
+//		// Step 5: Ask AI for natural language answer
+//		return aiService.generateAnswer(query, contextBuilder.toString());
+//	}
 
 	public List<Note> searchNotesByKeywords(String[] keywords, int userId) {
 		List<Note> result = new ArrayList<>();

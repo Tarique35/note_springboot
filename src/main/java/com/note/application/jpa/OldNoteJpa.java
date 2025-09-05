@@ -15,7 +15,7 @@ import jakarta.transaction.Transactional;
 
 @Repository
 @Transactional
-public class NoteJpa {
+public class OldNoteJpa {
 
 	@PersistenceContext
 	private EntityManager entityManager;
